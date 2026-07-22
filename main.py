@@ -1,5 +1,9 @@
+import sqlite3
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+
+DB_PATH = "tasks.db"
 
 app = FastAPI(title="Task API", version="1.0")
 
@@ -9,6 +13,35 @@ tasks = [
     {"id": 3, "title": "Push to GitHub", "done": True},
 ]
 next_id = 4
+
+
+def init_db():
+    """Create tasks.db + table, and seed 3 tasks only if empty."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    if count == 0:
+        conn.executemany(
+            "INSERT INTO tasks (title, done) VALUES (?, ?)",
+            [
+                ("Learn FastAPI", 0),
+                ("Build a CRUD API", 0),
+                ("Push to GitHub", 1),
+            ],
+        )
+        conn.commit()
+    conn.close()
+
+
+init_db()
 
 
 def find_task(task_id: int):
