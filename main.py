@@ -1,7 +1,11 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-app = FastAPI()
+app = FastAPI(
+    title="Task API",
+    description="A small in-memory to-do list API with full CRUD.",
+    version="1.0",
+)
 
 tasks = [
     {"id": 1, "title": "Learn FastAPI", "done": False},
@@ -11,8 +15,9 @@ tasks = [
 next_id = 4
 
 
-@app.get("/")
+@app.get("/", summary="API info")
 def read_root():
+    """Return the API name, version, and available endpoints."""
     return {
         "name": "Task API",
         "version": "1.0",
@@ -20,18 +25,21 @@ def read_root():
     }
 
 
-@app.get("/health")
+@app.get("/health", summary="Health check")
 def health():
+    """Check that the server is alive."""
     return {"status": "ok"}
 
 
-@app.get("/tasks")
+@app.get("/tasks", summary="List all tasks")
 def list_tasks():
+    """Return every task stored in memory."""
     return tasks
 
 
-@app.get("/tasks/{task_id}")
+@app.get("/tasks/{task_id}", summary="Get one task")
 def get_task(task_id: int):
+    """Return a single task by id, or 404 if it does not exist."""
     for task in tasks:
         if task["id"] == task_id:
             return task
@@ -41,8 +49,9 @@ def get_task(task_id: int):
     )
 
 
-@app.post("/tasks", status_code=201)
+@app.post("/tasks", status_code=201, summary="Create a task")
 async def create_task(request: Request):
+    """Create a new task from a JSON body with a non-empty title."""
     global next_id
 
     try:
@@ -72,8 +81,9 @@ async def create_task(request: Request):
     return task
 
 
-@app.put("/tasks/{task_id}")
+@app.put("/tasks/{task_id}", summary="Update a task")
 async def update_task(task_id: int, request: Request):
+    """Replace a task's title and/or done flag. Unknown id → 404."""
     task = next((t for t in tasks if t["id"] == task_id), None)
     if task is None:
         return JSONResponse(
@@ -122,8 +132,9 @@ async def update_task(task_id: int, request: Request):
     return task
 
 
-@app.delete("/tasks/{task_id}", status_code=204)
+@app.delete("/tasks/{task_id}", status_code=204, summary="Delete a task")
 def delete_task(task_id: int):
+    """Remove a task by id. Returns 204 with an empty body on success."""
     for index, task in enumerate(tasks):
         if task["id"] == task_id:
             tasks.pop(index)
