@@ -15,9 +15,19 @@ tasks = [
 next_id = 4
 
 
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def row_to_task(row):
+    return {"id": row["id"], "title": row["title"], "done": bool(row["done"])}
+
+
 def init_db():
     """Create tasks.db + table, and seed 3 tasks only if empty."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS tasks (
@@ -69,15 +79,24 @@ def health():
 
 @app.get("/tasks", summary="List all tasks")
 def list_tasks():
-    """Return all tasks."""
-    return tasks
+    """Return all tasks from the database."""
+    conn = get_conn()
+    rows = conn.execute("SELECT id, title, done FROM tasks").fetchall()
+    conn.close()
+    return [row_to_task(row) for row in rows]
 
 
 @app.get("/tasks/{task_id}", summary="Get one task")
 def get_task(task_id: int):
-    """Get a task by id."""
-    task = find_task(task_id)
-    return task if task else error(404, f"Task {task_id} not found")
+    """Get a task by id from the database."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return error(404, "Task not found")
+    return row_to_task(row)
 
 
 @app.post("/tasks", status_code=201, summary="Create a task")
