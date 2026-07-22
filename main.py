@@ -101,8 +101,7 @@ def get_task(task_id: int):
 
 @app.post("/tasks", status_code=201, summary="Create a task")
 async def create_task(request: Request):
-    """Create a new task. Body needs a title."""
-    global next_id
+    """Create a new task in the database. Body needs a title."""
     try:
         body = await request.json()
     except Exception:
@@ -110,10 +109,19 @@ async def create_task(request: Request):
     title = body.get("title") if isinstance(body, dict) else None
     if not title or not str(title).strip():
         return error(400, "title is required and must not be empty")
-    task = {"id": next_id, "title": str(title).strip(), "done": False}
-    next_id += 1
-    tasks.append(task)
-    return task
+
+    conn = get_conn()
+    cursor = conn.execute(
+        "INSERT INTO tasks (title, done) VALUES (?, ?)",
+        (str(title).strip(), 0),
+    )
+    conn.commit()
+    task_id = cursor.lastrowid
+    row = conn.execute(
+        "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
+    ).fetchone()
+    conn.close()
+    return row_to_task(row)
 
 
 @app.put("/tasks/{task_id}", summary="Update a task")
@@ -121,7 +129,7 @@ async def update_task(task_id: int, request: Request):
     """Update a task's title and/or done."""
     task = find_task(task_id)
     if not task:
-        return error(404, f"Task {task_id} not found")
+        return error(404, "Task not found")
     try:
         body = await request.json()
     except Exception:
@@ -144,6 +152,6 @@ def delete_task(task_id: int):
     """Delete a task by id."""
     task = find_task(task_id)
     if not task:
-        return error(404, f"Task {task_id} not found")
+        return error(404, "Task not found")
     tasks.remove(task)
     return Response(status_code=204)
