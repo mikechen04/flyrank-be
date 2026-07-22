@@ -7,13 +7,6 @@ DB_PATH = "tasks.db"
 
 app = FastAPI(title="Task API", version="1.0")
 
-tasks = [
-    {"id": 1, "title": "Learn FastAPI", "done": False},
-    {"id": 2, "title": "Build a CRUD API", "done": False},
-    {"id": 3, "title": "Push to GitHub", "done": True},
-]
-next_id = 4
-
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
@@ -52,13 +45,6 @@ def init_db():
 
 
 init_db()
-
-
-def find_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    return None
 
 
 def error(status: int, message: str):
@@ -126,32 +112,58 @@ async def create_task(request: Request):
 
 @app.put("/tasks/{task_id}", summary="Update a task")
 async def update_task(task_id: int, request: Request):
-    """Update a task's title and/or done."""
-    task = find_task(task_id)
-    if not task:
+    """Update a task in the database (title and/or done)."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
         return error(404, "Task not found")
+
     try:
         body = await request.json()
     except Exception:
+        conn.close()
         return error(400, "body must be valid JSON")
     if not isinstance(body, dict) or ("title" not in body and "done" not in body):
+        conn.close()
         return error(400, "body must include title and/or done")
+
+    title = row["title"]
+    done = row["done"]
     if "title" in body:
         if not body["title"] or not str(body["title"]).strip():
+            conn.close()
             return error(400, "title must not be empty")
-        task["title"] = str(body["title"]).strip()
+        title = str(body["title"]).strip()
     if "done" in body:
         if not isinstance(body["done"], bool):
+            conn.close()
             return error(400, "done must be true or false")
-        task["done"] = body["done"]
-    return task
+        done = 1 if body["done"] else 0
+
+    conn.execute(
+        "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
+        (title, done, task_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
+    ).fetchone()
+    conn.close()
+    return row_to_task(row)
 
 
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete a task")
 def delete_task(task_id: int):
-    """Delete a task by id."""
-    task = find_task(task_id)
-    if not task:
+    """Delete a task from the database."""
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        conn.close()
         return error(404, "Task not found")
-    tasks.remove(task)
+    conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
     return Response(status_code=204)
