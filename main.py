@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -33,4 +34,7 @@ def get_task(task_id: int):
     for task in tasks:
         if task["id"] == task_id:
             return task
-    raise HTTPException(status_code=404, detail={"error": f"Task {task_id} not found"})
+    return JSONResponse(
+        status_code=404,
+        content={"error": f"Task {task_id} not found"},
+    )
