@@ -58,6 +58,8 @@ This returns only completed tasks from the database.
 
 ## Database screenshot
 
+Open `tasks.db` in a SQLite viewer (for example DB Browser for SQLite) to inspect the `tasks` table.
+
 ![tasks table in SQLite](docs/database.png)
 
 ## Swagger screenshot
