@@ -5,6 +5,7 @@ import random
 import time
 from pathlib import Path
 
+from src.llm.settings import MAX_ATTEMPTS, TIMEOUT_SECONDS
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
 
 PROMPT_VERSION = "triage-v1"
@@ -20,7 +21,7 @@ def _client() -> OpenAI:
     return OpenAI(
         base_url=os.environ["LLM_BASE_URL"],
         api_key=os.environ["LLM_API_KEY"],
-        timeout=30.0,  # real timeout — do not rely on SDK default
+        timeout=TIMEOUT_SECONDS,  # real timeout — do not rely on SDK default
         max_retries=0,  # we handle retries ourselves (see README)
     )
 
@@ -60,7 +61,7 @@ def complete(user_text: str, repair_note: str | None = None) -> str:
 
     client = _client()
     last_exc = None
-    for attempt in range(3):
+    for attempt in range(MAX_ATTEMPTS):
         started = time.time()
         try:
             res = client.chat.completions.create(
@@ -73,7 +74,7 @@ def complete(user_text: str, repair_note: str | None = None) -> str:
             return res.choices[0].message.content or ""
         except Exception as exc:
             last_exc = exc
-            if not _should_retry(exc) or attempt == 2:
+            if not _should_retry(exc) or attempt == MAX_ATTEMPTS - 1:
                 raise
             # exponential backoff with jitter; honor Retry-After on 429 if present
             wait = (2**attempt) + random.random()
