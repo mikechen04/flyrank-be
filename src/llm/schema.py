@@ -27,9 +27,9 @@ class TriageOut(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
-STUB_ANSWER = {
-    "category": "other",
-    "urgency": "normal",
-    "confidence": 0.5,
-    "reason": "Stub mode — no model call was made.",
-}
+STUB_ANSWER = TriageOut(
+    category=Category.other,
+    urgency=Urgency.normal,
+    confidence=0.5,
+    reason="Stub mode — no model call was made.",
+)
