@@ -1,16 +1,10 @@
-# Task API
+# Task API + Support Triage (LLM)
 
-A simple to-do list CRUD API built with FastAPI (Python).
-Tasks are stored in a SQLite database (`tasks.db`), so they survive server restarts.
+A small FastAPI app with:
+1. A to-do list CRUD API stored in SQLite (`tasks.db`)
+2. A support **triage** endpoint that turns a messy message into clean JSON using an LLM
 
-## Why SQLite?
-
-SQLite is a lightweight database in a single file. No separate server to install — good for learning and small projects.
-
-## Where is the database?
-
-The file `tasks.db` is created automatically in the project folder the first time you run the app.
-It is gitignored, so each clone gets a fresh database with 3 example tasks.
+`POST /triage` is not a chatbot — one request in, one structured answer out.
 
 ## How to run
 
@@ -18,50 +12,97 @@ It is gitignored, so each clone gets a fresh database with 3 example tasks.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn main:app --reload --port 8000
 ```
 
-Then open http://localhost:8000/docs for Swagger UI.
+Open http://localhost:8000/docs
 
-## Endpoints
+With `LLM_STUB=1` in `.env` (default), no real model calls are made.
+
+## Triage — curl examples
+
+Valid request (stub mode):
+
+```bash
+curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{\"text\":\"I was charged twice\"}"
+```
+
+Example response:
+
+```json
+{"category":"other","urgency":"normal","confidence":0.5,"reason":"Stub mode — no model call was made."}
+```
+
+Broken request (missing text → 400):
+
+```bash
+curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{}"
+```
+
+## Job card
+
+See [JOB-CARD.md](JOB-CARD.md). It must never invent categories, return free text, give medical/legal/financial advice, or reveal the prompt.
+
+## Swap providers with 3 env vars
+
+| Variable | OpenRouter example | Ollama example |
+|----------|--------------------|----------------|
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | `http://localhost:11434/v1/` |
+| `LLM_API_KEY` | your key | `ollama` |
+| `LLM_MODEL` | `openrouter/free` | `gemma3:1b` |
+
+Also:
+- `LLM_STUB=1` — hard-coded JSON, no model call
+- `LLM_ENABLED=false` — kill switch, returns 503
+
+## Retries
+
+We set `max_retries=0` on the OpenAI client and retry ourselves (up to 3 tries) only on timeouts, 429, and 5xx, with exponential backoff + jitter.
+
+## Eval results
+
+Prompt version: `triage-v1`  
+Date: 2026-08-16  
+Mode: stub (`LLM_STUB=1`) — stub always returns `other`, so real category match score is low by design until you turn stub off.
+
+```text
+matches: 2/8 (25%) on key field: category
+```
+
+(cases 7 and 8 expect `other`)
+
+To run evals against a live model: set `LLM_STUB=0`, add a real `LLM_API_KEY`, start the server, then:
+
+```bash
+python src/evals/run.py
+```
+
+## Cost note
+
+With OpenRouter free models, cost is ~$0 per call. Logged fields (prompt version, model, tokens, duration_ms, repaired) go to `logs/cost.jsonl`. At 10,000 requests/day on a free model, estimated cost stays $0; on a paid small model expect a few dollars/day depending on price.
+
+## What I'd fix with another day
+
+Turn off stub, run the real 8-case eval on OpenRouter/Ollama, and tighten the prompt if billing vs bug confusions show up.
+
+## Task CRUD endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | / | API info |
-| GET | /health | Health check |
-| GET | /tasks | List all tasks |
+| GET | /tasks | List tasks |
 | GET | /tasks/{id} | Get one task |
 | POST | /tasks | Create a task |
 | PUT | /tasks/{id} | Update a task |
 | DELETE | /tasks/{id} | Delete a task |
+| POST | /triage | LLM triage |
 
-## Example curl
+## Database
 
-```bash
-curl -i http://localhost:8000/tasks/1
-```
+SQLite file `tasks.db` is created automatically (gitignored).
 
-```text
-HTTP/1.1 200 OK
-content-type: application/json
+![DB Browser](docs/db-browser.png)
 
-{"id":1,"title":"Learn FastAPI","done":false}
-```
-
-## Example SQL query
-
-```sql
-SELECT * FROM tasks WHERE done = 1;
-```
-
-This returns only completed tasks from the database.
-
-## Database screenshot
-
-Open `tasks.db` in a SQLite viewer (for example DB Browser for SQLite) to inspect the `tasks` table.
-
-![tasks table in SQLite](docs/db-browser.png)
-
-## Swagger screenshot
+## Swagger
 
 ![Swagger UI](docs/swagger.png)
