@@ -22,16 +22,16 @@ With `LLM_STUB=1` in `.env` (default), no real model calls are made.
 
 ## Triage — curl examples
 
-Valid request (stub mode):
+Valid request (live model):
 
 ```bash
-curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{\"text\":\"I was charged twice\"}"
+curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{\"text\":\"I was charged twice on my last invoice\"}"
 ```
 
 Example response:
 
 ```json
-{"category":"other","urgency":"normal","confidence":0.5,"reason":"Stub mode — no model call was made."}
+{"category":"billing","urgency":"high","confidence":0.9,"reason":"Duplicate charge report."}
 ```
 
 Broken request (missing text → 400):
@@ -64,15 +64,15 @@ We set `max_retries=0` on the OpenAI client and retry ourselves (up to 3 tries) 
 
 Prompt version: `triage-v1`  
 Date: 2026-08-16  
-Mode: stub (`LLM_STUB=1`) — stub always returns `other`, so real category match score is low by design until you turn stub off.
+Provider/model: OpenRouter `openrouter/free`  
+Mode: live (`LLM_STUB=0`)
 
 ```text
-matches: 2/8 (25%) on key field: category
+matches: 8/8 (100%) on key field: category
+all cases passed
 ```
 
-(cases 7 and 8 expect `other`)
-
-To run evals against a live model: set `LLM_STUB=0`, add a real `LLM_API_KEY`, start the server, then:
+To re-run:
 
 ```bash
 python src/evals/run.py
@@ -84,7 +84,7 @@ With OpenRouter free models, cost is ~$0 per call. Logged fields (prompt version
 
 ## What I'd fix with another day
 
-Turn off stub, run the real 8-case eval on OpenRouter/Ollama, and tighten the prompt if billing vs bug confusions show up.
+Add more hard/ambiguous eval cases and try a prompt v2 if free-model answers start drifting.
 
 ## Task CRUD endpoints
 
