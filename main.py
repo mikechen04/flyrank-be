@@ -1,11 +1,32 @@
 import sqlite3
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+from src.routes.triage import router as triage_router
+
+load_dotenv()
 
 DB_PATH = "tasks.db"
 
 app = FastAPI(title="Task API", version="1.0")
+app.include_router(triage_router)
+
+
+@app.exception_handler(RequestValidationError)
+def validation_400(request: Request, exc: RequestValidationError):
+    """Return 400 (not 422) and name the bad field — Stage 1 requirement."""
+    fields = []
+    for err in exc.errors():
+        loc = err.get("loc", ())
+        name = ".".join(str(x) for x in loc if x != "body") or "body"
+        fields.append(name)
+    return JSONResponse(
+        status_code=400,
+        content={"error": f"invalid field: {', '.join(fields) or 'body'}"},
+    )
 
 
 def get_conn():
