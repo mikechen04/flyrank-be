@@ -31,5 +31,5 @@ STUB_ANSWER = TriageOut(
     category=Category.other,
     urgency=Urgency.normal,
     confidence=0.5,
-    reason="Stub mode — no model call was made.",
+    reason="Stub mode. No model call was made.",
 )

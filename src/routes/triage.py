@@ -1,35 +1,46 @@
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks, Header, Response
 from fastapi.responses import JSONResponse
-from openai import APIStatusError, APITimeoutError
 
-from src.llm.parse import run_triage
-from src.llm.schema import STUB_ANSWER, TriageIn
+from src.jobs.store import create_job, get_job, job_to_response
+from src.jobs.worker import process_triage_job
+from src.llm.schema import TriageIn
 
 router = APIRouter()
 
 
-def _err(status: int, message: str, **extra):
-    return JSONResponse(status_code=status, content={"error": message, **extra})
+def _err(status: int, message: str):
+    return JSONResponse(status_code=status, content={"error": message})
 
 
-@router.post("/triage", summary="Triage a support message")
-def triage(body: TriageIn):
-    """Classify a support message into category + urgency."""
+@router.post("/triage", status_code=202, summary="Queue a triage job")
+def triage(
+    body: TriageIn,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Return 202 right away. The worker runs the AI call. Poll status_url for the result."""
     if os.getenv("LLM_ENABLED", "true").lower() == "false":
         return _err(503, "LLM is disabled (LLM_ENABLED=false)")
 
-    if os.getenv("LLM_STUB", "0") == "1":
-        return STUB_ANSWER
+    job = create_job("triage", {"text": body.text}, idempotency_key=idempotency_key)
+    if job["status"] == "queued":
+        background_tasks.add_task(process_triage_job, job["id"])
 
-    try:
-        return run_triage(body.text)
-    except APITimeoutError:
-        return _err(504, "LLM timed out after 30 seconds")
-    except APIStatusError as exc:
-        if exc.status_code in (401, 403):
-            return _err(401, "LLM auth failed — check LLM_API_KEY")
-        return _err(502, f"LLM provider error: {exc.status_code}")
-    except ValueError as exc:
-        return _err(422, "model output failed validation", detail=str(exc))
+    status_url = f"/triage/jobs/{job['id']}"
+    response.headers["Location"] = status_url
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "status_url": status_url,
+    }
+
+
+@router.get("/triage/jobs/{job_id}", summary="Triage job status")
+def triage_job_status(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        return _err(404, "job not found")
+    return job_to_response(job)

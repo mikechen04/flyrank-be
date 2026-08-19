@@ -1,23 +1,41 @@
-import sqlite3
+import os
 
 from dotenv import load_dotenv
+
+load_dotenv()
+os.environ["INNGEST_DEV"] = "1"
+
+import sqlite3
+
+import inngest.fast_api
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from src.inngest_app.client import inngest_client
+from src.inngest_app.functions import heartbeat, make_report, say_hello
+from src.jobs.store import init_jobs_db
+from src.routes.reports import router as reports_router
 from src.routes.triage import router as triage_router
 
-load_dotenv()
+init_jobs_db()
 
 DB_PATH = "tasks.db"
 
 app = FastAPI(title="Task API", version="1.0")
 app.include_router(triage_router)
+app.include_router(reports_router)
+
+inngest.fast_api.serve(
+    app,
+    inngest_client,
+    [say_hello, make_report, heartbeat],
+)
 
 
 @app.exception_handler(RequestValidationError)
 def validation_400(request: Request, exc: RequestValidationError):
-    """Return 400 (not 422) and name the bad field — Stage 1 requirement."""
+    """Return 400 and name the bad field."""
     fields = []
     for err in exc.errors():
         loc = err.get("loc", ())

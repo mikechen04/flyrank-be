@@ -1,4 +1,4 @@
-"""Call the LLM with timeout, retries, and a simple cost log."""
+"""Call the LLM with timeout, retries, and a cost log."""
 import json
 import os
 import random
@@ -23,7 +23,7 @@ def _client() -> OpenAI:
         base_url=os.environ["LLM_BASE_URL"],
         api_key=os.environ["LLM_API_KEY"],
         timeout=TIMEOUT_SECONDS,
-        max_retries=0,  # we retry ourselves (see README)
+        max_retries=0,  # we retry in this file
     )
 
 
