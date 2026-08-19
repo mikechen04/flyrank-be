@@ -54,6 +54,4 @@ async def heartbeat(ctx: inngest.Context) -> str:
         print(line)
         return line
 
-    line = await ctx.step.run("summary", summary)
-    ctx.logger.info(line)
-    return line
+    return await ctx.step.run("summary", summary)

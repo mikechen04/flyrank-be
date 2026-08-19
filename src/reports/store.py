@@ -1,3 +1,3 @@
-"""In-memory report store (clears on restart — that is expected)."""
+"""In-memory reports. Gone after restart."""
 
 reports: dict[str, dict] = {}

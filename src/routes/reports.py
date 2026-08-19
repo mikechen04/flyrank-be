@@ -15,9 +15,8 @@ class ReportIn(BaseModel):
     topic: str = Field(min_length=1)
 
 
-@router.post("/reports", status_code=202, summary="Queue a report job")
+@router.post("/reports", status_code=202)
 async def create_report(body: ReportIn):
-    """Accept now (202). Inngest does the slow work."""
     report_id = str(uuid.uuid4())
     reports[report_id] = {"id": report_id, "topic": body.topic, "status": "pending"}
 
@@ -27,11 +26,10 @@ async def create_report(body: ReportIn):
             data={"id": report_id, "topic": body.topic},
         )
     )
-
     return {"id": report_id, "status": "pending"}
 
 
-@router.get("/reports/{report_id}", summary="Report status")
+@router.get("/reports/{report_id}")
 def get_report(report_id: str):
     report = reports.get(report_id)
     if not report:

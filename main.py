@@ -35,7 +35,6 @@ inngest.fast_api.serve(
 
 @app.exception_handler(RequestValidationError)
 def validation_400(request: Request, exc: RequestValidationError):
-    """Return 400 and name the bad field."""
     fields = []
     for err in exc.errors():
         loc = err.get("loc", ())
@@ -58,7 +57,6 @@ def row_to_task(row):
 
 
 def init_db():
-    """Create tasks.db + table, and seed 3 tasks only if empty."""
     conn = get_conn()
     conn.execute(
         """
@@ -92,19 +90,16 @@ def error(status: int, message: str):
 
 @app.get("/", summary="API info")
 def root():
-    """API name, version, and endpoints."""
-    return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
+    return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks", "/reports"]}
 
 
 @app.get("/health", summary="Health check")
 def health():
-    """Check if the server is running."""
     return {"status": "ok"}
 
 
 @app.get("/tasks", summary="List all tasks")
 def list_tasks():
-    """Return all tasks from the database."""
     conn = get_conn()
     rows = conn.execute("SELECT id, title, done FROM tasks").fetchall()
     conn.close()
@@ -113,7 +108,6 @@ def list_tasks():
 
 @app.get("/tasks/{task_id}", summary="Get one task")
 def get_task(task_id: int):
-    """Get a task by id from the database."""
     conn = get_conn()
     row = conn.execute(
         "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
@@ -126,7 +120,6 @@ def get_task(task_id: int):
 
 @app.post("/tasks", status_code=201, summary="Create a task")
 async def create_task(request: Request):
-    """Create a new task in the database. Body needs a title."""
     try:
         body = await request.json()
     except Exception:
@@ -151,7 +144,6 @@ async def create_task(request: Request):
 
 @app.put("/tasks/{task_id}", summary="Update a task")
 async def update_task(task_id: int, request: Request):
-    """Update a task in the database (title and/or done)."""
     conn = get_conn()
     row = conn.execute(
         "SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)
@@ -196,7 +188,6 @@ async def update_task(task_id: int, request: Request):
 
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete a task")
 def delete_task(task_id: int):
-    """Delete a task from the database."""
     conn = get_conn()
     row = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if not row:

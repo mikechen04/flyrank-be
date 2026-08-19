@@ -14,14 +14,13 @@ def _err(status: int, message: str):
     return JSONResponse(status_code=status, content={"error": message})
 
 
-@router.post("/triage", status_code=202, summary="Queue a triage job")
+@router.post("/triage", status_code=202)
 def triage(
     body: TriageIn,
     background_tasks: BackgroundTasks,
     response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Return 202 right away. The worker runs the AI call. Poll status_url for the result."""
     if os.getenv("LLM_ENABLED", "true").lower() == "false":
         return _err(503, "LLM is disabled (LLM_ENABLED=false)")
 
@@ -38,7 +37,7 @@ def triage(
     }
 
 
-@router.get("/triage/jobs/{job_id}", summary="Triage job status")
+@router.get("/triage/jobs/{job_id}")
 def triage_job_status(job_id: str):
     job = get_job(job_id)
     if not job:
