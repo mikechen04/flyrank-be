@@ -1,12 +1,13 @@
-# Task API + Support Triage (LLM)
+# Task API + background reports (Inngest)
 
-A small FastAPI app with:
-1. A to-do list CRUD API stored in SQLite (`tasks.db`)
-2. A support **triage** endpoint that turns a messy message into clean JSON using an LLM
+FastAPI app with:
+1. To-do list CRUD (SQLite)
+2. Support triage as a background job
+3. Report jobs via Inngest (this assignment)
 
-`POST /triage` is not a chatbot — one request in, one structured answer out.
+## How to run (two terminals)
 
-## How to run
+Terminal 1 - API:
 
 ```bash
 python -m venv .venv
@@ -16,93 +17,91 @@ copy .env.example .env
 uvicorn main:app --reload --port 8000
 ```
 
-Open http://localhost:8000/docs
-
-With `LLM_STUB=1` in `.env` (default), no real model calls are made.
-
-## Triage — curl examples
-
-Valid request (live model):
+Terminal 2 - Inngest Dev Server:
 
 ```bash
-curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{\"text\":\"I was charged twice on my last invoice\"}"
+npx inngest-cli@latest dev -u http://localhost:8000/api/inngest
 ```
 
-Example response:
+Then open:
+- API docs: http://localhost:8000/docs
+- Inngest dashboard: http://localhost:8288
 
-```json
-{"category":"billing","urgency":"high","confidence":0.9,"reason":"Duplicate charge report."}
-```
+Set `INNGEST_DEV=1` in `.env` (already in `.env.example`).
 
-Broken request (missing text → 400):
+## Reports (Inngest background job)
+
+Queue a report (returns fast with 202):
 
 ```bash
-curl -i -X POST http://localhost:8000/triage -H "Content-Type: application/json" -d "{}"
+curl -i -X POST http://localhost:8000/reports -H "Content-Type: application/json" -d "{\"topic\":\"onboarding\"}"
 ```
 
-## Job card
-
-See [JOB-CARD.md](JOB-CARD.md). It must never invent categories, return free text, give medical/legal/financial advice, or reveal the prompt.
-
-## Swap providers with 3 env vars
-
-| Variable | OpenRouter example | Ollama example |
-|----------|--------------------|----------------|
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | `http://localhost:11434/v1/` |
-| `LLM_API_KEY` | your key | `ollama` |
-| `LLM_MODEL` | `openrouter/free` | `gemma3:1b` |
-
-Also:
-- `LLM_STUB=1` — hard-coded JSON, no model call
-- `LLM_ENABLED=false` — kill switch, returns 503
-
-## Retries
-
-We set `max_retries=0` on the OpenAI client and retry ourselves (up to 3 tries) only on timeouts, 429, and 5xx, with exponential backoff + jitter.
-
-## Eval results
-
-Prompt version: `triage-v1`  
-Date: 2026-08-16  
-Provider/model: OpenRouter `openrouter/free`  
-Mode: live (`LLM_STUB=0`)
+Example:
 
 ```text
-matches: 8/8 (100%) on key field: category
-all cases passed
+HTTP/1.1 202 Accepted
+{"id":"...","status":"pending"}
 ```
 
-To re-run:
+Poll status:
 
 ```bash
-python src/evals/run.py
+curl -i http://localhost:8000/reports/ID_HERE
 ```
 
-## Cost note
+First poll is usually `pending`. After about 8 seconds it becomes `done` with a result.
 
-With OpenRouter free models, cost is ~$0 per call. Logged fields (prompt version, model, tokens, duration_ms, repaired) go to `logs/cost.jsonl`. At 10,000 requests/day on a free model, estimated cost stays $0; on a paid small model expect a few dollars/day depending on price.
+Missing topic returns 400 (rejected at the door, no job created).
 
-## What I'd fix with another day
+Topic `"fail"` makes the worker throw so you can watch retries in the dashboard (3 attempts total: original + 2 retries).
 
-Add more hard/ambiguous eval cases and try a prompt v2 if free-model answers start drifting.
+### Wrong input vs wrong moment
 
-## Task CRUD endpoints
+Wrong input (no topic) is rejected with 400 before any job starts.
+Wrong moment (worker crash, like topic "fail") deserves retries because the input was fine but the run failed.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /tasks | List tasks |
-| GET | /tasks/{id} | Get one task |
-| POST | /tasks | Create a task |
-| PUT | /tasks/{id} | Update a task |
-| DELETE | /tasks/{id} | Delete a task |
-| POST | /triage | LLM triage |
+## Cron heartbeat
 
-## Database
+The `heartbeat` function runs every minute (`* * * * *`) and logs how many reports are pending / done / failed.
 
-SQLite file `tasks.db` is created automatically (gitignored).
+Cron answers:
+1. Every day at 08:00: `0 8 * * *`
+2. Every Sunday at 22:00: `0 22 * * 0`
+
+## Endpoints and functions
+
+| Kind | Name | What it does |
+|------|------|--------------|
+| Endpoint | `GET /health` | Health check |
+| Endpoint | `POST /reports` | Queue report, return 202 |
+| Endpoint | `GET /reports/{id}` | pending then done (+ result) |
+| Inngest | `say-hello` | Sleep 5s, return hello (Stage 1 test) |
+| Inngest | `make-report` | Sleep 8s, build report (retries=2) |
+| Inngest | `heartbeat` | Cron every minute, log summary |
+
+## Triage (optional / earlier work)
+
+`POST /triage` also returns 202 and you poll `GET /triage/jobs/{id}`.
+See [JOB-CARD.md](JOB-CARD.md) for the AI triage rules.
+
+## Env vars (LLM triage)
+
+| Variable | Example |
+|----------|---------|
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `LLM_API_KEY` | your key |
+| `LLM_MODEL` | `openrouter/free` |
+| `LLM_STUB` | `1` for fake answers |
+| `LLM_ENABLED` | `false` to turn triage off |
+| `INNGEST_DEV` | `1` for local Inngest |
+
+## Screenshots
+
+Add an Inngest dashboard screenshot here after you run a successful report, a failed "fail" topic, and a heartbeat:
+
+![Inngest dashboard](docs/inngest-dashboard.png)
 
 ![DB Browser](docs/db-browser.png)
-
-## Swagger
 
 ![Swagger UI](docs/swagger.png)
